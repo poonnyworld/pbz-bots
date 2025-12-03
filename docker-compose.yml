@@ -7,6 +7,7 @@ services:
     restart: always
     ports:
       - "3000:3000" # เปิด Port ให้หน้าเว็บ Admin เข้าได้
+      - "5555:5555"
     volumes:
       # ✅ Map โฟลเดอร์ database ออกมาเก็บไว้ที่เครื่อง VPS (กันข้อมูลหาย)
       - ./honor-db-data:/app/data

@@ -65,6 +65,54 @@ app.get('/api/items', async (req, res) => {
     }
 });
 
+// API: แก้ไขแต้มผู้ใช้
+app.put('/api/users/:id', async (req, res) => {
+    const { id } = req.params;
+    const { points } = req.body;
+    try {
+        const updatedUser = await prisma.user.update({
+            where: { id: id },
+            data: { points: parseInt(points) }
+        });
+        res.json(updatedUser);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to update user" });
+    }
+});
+
+// API: แก้ไขรายละเอียดสินค้า
+app.put('/api/items/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name, cost, description, stock, isActive } = req.body;
+    try {
+        const updatedItem = await prisma.item.update({
+            where: { id: parseInt(id) },
+            data: {
+                name,
+                cost: parseInt(cost),
+                description,
+                stock: parseInt(stock),
+                isActive: isActive
+            }
+        });
+        res.json(updatedItem);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to update item" });
+    }
+});
+
+// API: ลบสินค้า (แถมให้เผื่ออยากลบ)
+app.delete('/api/items/:id', async (req, res) => {
+    try {
+        await prisma.item.delete({ where: { id: parseInt(req.params.id) } });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to delete item" });
+    }
+});
+
 // เริ่มรัน Server
 app.listen(PORT, () => {
     console.log(`🌐 API Server running at http://localhost:${PORT}`);
