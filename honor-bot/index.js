@@ -22,8 +22,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());        // อนุญาตให้เว็บอื่นยิงเข้ามาได้
 app.use(express.json()); // อ่าน JSON จาก Body ได้
-
-// ✅ เพิ่มบรรทัดนี้: บอกว่าถ้าคนเข้าเว็บมาเฉยๆ ให้ไปหาไฟล์ในโฟลเดอร์ public
 app.use(express.static('public'));
 
 // 🔐 ตั้งค่า Session
@@ -48,13 +46,8 @@ const requireAuth = (req, res, next) => {
 // API: Login (เช็คกับ .env โดยตรง)
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-
-    // ดึงค่าจาก .env มาเทียบ
-    const envUser = process.env.ADMIN_USERNAME;
-    const envPass = process.env.ADMIN_PASSWORD;
-
-    if (username === envUser && password === envPass) {
-        req.session.adminId = 'fixed_admin_session'; // Set Session หลอกๆ ว่า Login แล้ว
+    if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+        req.session.adminId = 'fixed_admin_session';
         res.json({ success: true });
     } else {
         res.status(401).json({ error: "Invalid credentials" });
@@ -69,82 +62,51 @@ app.post('/api/logout', (req, res) => {
 
 // API: Check Auth
 app.get('/api/check-auth', (req, res) => {
-    // เช็คแค่ว่ามี Session หรือไม่
-    if (req.session.adminId) res.json({ loggedIn: true });
-    else res.json({ loggedIn: false });
+    res.json({ loggedIn: !!req.session.adminId });
 });
 
 // --- DATA API (ใส่ requireAuth ดักไว้ทุกอัน!) ---
 
+// A. Users
 app.get('/api/users', requireAuth, async (req, res) => {
-    // ... (Code เดิม)
     const users = await prisma.user.findMany({ orderBy: { points: 'desc' } });
     res.json(users);
 });
 
-// API: ดึงข้อมูล User ทั้งหมด (เรียงตามแต้มมากสุด)
-app.get('/api/users', async (req, res) => {
-    try {
-        const users = await prisma.user.findMany({
-            orderBy: { points: 'desc' }
-        });
-        res.json(users);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch users" });
-    }
-});
-
-// API: เพิ่มของรางวัลใหม่ (Admin)
-app.post('/api/items', requireAuth, async (req, res) => {
-    const { name, cost, description } = req.body;
-    try {
-        const newItem = await prisma.item.create({
-            data: {
-                name,
-                cost: parseInt(cost),
-                description
-            }
-        });
-        res.json(newItem);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to create item" });
-    }
-});
-
-// ✅ เพิ่มอันนี้: API ดึงรายชื่อของรางวัลทั้งหมด
-app.get('/api/items', requireAuth, async (req, res) => {
-    try {
-        const items = await prisma.item.findMany({
-            orderBy: { id: 'asc' } // เรียงตาม ID
-        });
-        res.json(items);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch items" });
-    }
-});
-
-// API: แก้ไขแต้มผู้ใช้
 app.put('/api/users/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     const { points } = req.body;
     try {
-        const updatedUser = await prisma.user.update({
+        const updated = await prisma.user.update({
             where: { id: id },
             data: { points: parseInt(points) }
         });
-        res.json(updatedUser);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Failed to update user" });
-    }
+        res.json(updated);
+    } catch (e) { res.status(500).json({ error: "Update failed" }); }
 });
 
-// API: แก้ไขรายละเอียดสินค้า
+// B. Items
+app.get('/api/items', requireAuth, async (req, res) => {
+    const items = await prisma.item.findMany({ orderBy: { id: 'asc' } });
+    res.json(items);
+});
+
+app.post('/api/items', requireAuth, async (req, res) => {
+    const { name, cost, description } = req.body;
+    try {
+        const newItem = await prisma.item.create({
+            data: { name, cost: parseInt(cost), description, stock: -1, isActive: true }
+        });
+        res.json(newItem);
+    } catch (e) { res.status(500).json({ error: "Create failed" }); }
+});
+
+// ✅ ใส่ส่วนนี้คืนให้ครับ (Edit Item)
 app.put('/api/items/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     const { name, cost, description, stock, isActive } = req.body;
     try {
-        const updatedItem = await prisma.item.update({
+        const updated = await prisma.item.update({
             where: { id: parseInt(id) },
             data: {
                 name,
@@ -154,28 +116,11 @@ app.put('/api/items/:id', requireAuth, async (req, res) => {
                 isActive: isActive
             }
         });
-        res.json(updatedItem);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Failed to update item" });
-    }
+        res.json(updated);
+    } catch (e) { res.status(500).json({ error: "Update failed" }); }
 });
 
-// API: ลบสินค้า (แถมให้เผื่ออยากลบ)
-app.delete('/api/items/:id', requireAuth, async (req, res) => {
-    try {
-        await prisma.item.delete({ where: { id: parseInt(req.params.id) } });
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to delete item" });
-    }
-});
-
-// เริ่มรัน Server
-app.listen(PORT, () => {
-    console.log(`🌐 API Server running at http://localhost:${PORT}`);
-});
-
+app.listen(PORT, () => console.log(`🌐 Dashboard running on port ${PORT}`));
 
 // --- ส่วนของ DISCORD BOT (Logic เดิม) ---
 client.once('ready', () => {

@@ -276,6 +276,7 @@
                     <table id="itemTable">
                         <thead>
                             <tr>
+                                <th style="width: 50px;">ID</th>
                                 <th>Item</th>
                                 <th>Cost</th>
                                 <th>Stock</th>
@@ -328,41 +329,28 @@
 
 
         async function fetchItems() {
-
             const res = await fetch('/api/items');
-
+            if (!res.ok) return; // ดัก error เผื่อ session หมดอายุ
             const items = await res.json();
-
             const tbody = document.getElementById('itemBody');
-
             tbody.innerHTML = '';
-
             items.forEach(i => {
-
                 const stockDisplay = i.stock === -1 ? '∞' : i.stock;
-
                 const style = i.isActive ? '' : 'opacity: 0.5;';
 
                 tbody.innerHTML += `
-
                 <tr style="${style}">
-
-                    <td><strong>${i.name}</strong></td>
-
-                    <td>${i.cost}</td>
-
-                    <td>${stockDisplay}</td>
-
-                    <td>
-
-                        <button class="btn btn-edit btn-sm" onclick='openItemModal(${JSON.stringify(i)})'>✏️</button>
-
+                    <td><span style="color:#666">#${i.id}</span></td> <td>
+                        <strong>${i.name}</strong><br>
+                        <small style="color:#888">${i.description || '-'}</small>
                     </td>
-
+                    <td><span class="badge" style="background:none; border:1px solid #444; color:#ccc">${i.cost}</span></td>
+                    <td>${stockDisplay}</td>
+                    <td>
+                        <button class="btn-action" onclick='openItemModal(${JSON.stringify(i)})'>✏️</button>
+                    </td>
                 </tr>`;
-
             });
-
         }
 
 
