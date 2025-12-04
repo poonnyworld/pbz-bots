@@ -330,41 +330,56 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // --- 🎲 คำสั่งวัดดวง (!flip <amount>) ---
+    /// --- 🎲 คำสั่งวัดดวง (!flip <amount> <side>) ---
     if (message.content.toLowerCase().startsWith('!flip')) {
         const args = message.content.split(' ');
         const betArg = args[1];
+        const sideArg = args[2]; // รับค่า หัว/ก้อย
 
-        // 1. ถ้าไม่ใส่จำนวนเงิน -> แสดงกติกา (Rule Book)
-        if (!betArg) {
+        // 1. ถ้าใส่ไม่ครบ หรือไม่ถูก format -> แสดงกติกา (Rule Book)
+        if (!betArg || !sideArg) {
             const ruleEmbed = new EmbedBuilder()
                 .setColor(0xFFD700) // สีทอง
                 .setTitle('🎲 Coin Flip Rules')
                 .setDescription('Test your luck with the Order\'s coin.')
                 .addFields(
-                    { name: 'How to Play', value: 'Type `!flip <amount>` to place a bet.', inline: false },
-                    { name: 'Win Condition', value: '50% Chance to double your bet (2x).', inline: true },
-                    { name: 'Lose Condition', value: 'If you lose, your souls are consumed.', inline: true }
+                    { name: 'How to Play', value: 'Type `!flip <amount> <heads/tails>`\nExample: `!flip 100 heads`', inline: false },
+                    { name: 'Win Condition', value: 'If the coin matches your call, you win **2x** your bet.', inline: false },
+                    { name: 'Lose Condition', value: 'If you guess wrong, your souls are consumed.', inline: false }
                 )
                 .setFooter({ text: 'Warning: Gambling can be addictive. Bet wisely.' });
 
             return message.channel.send({ embeds: [ruleEmbed] });
         }
 
-        // 2. ตรวจสอบยอดเงินเดิมพัน
+        // 2. ตรวจสอบยอดเงิน
         const bet = parseInt(betArg);
-        if (isNaN(bet) || bet <= 0) return message.reply("⚠️ Invalid amount. Example: `!flip 10`");
+        if (isNaN(bet) || bet <= 0) return message.reply("⚠️ Invalid amount.");
+
+        // 3. ตรวจสอบการเลือกฝั่ง (Heads/Tails)
+        let userChoice = sideArg.toLowerCase();
+        const validHeads = ['heads', 'head', 'h'];
+        const validTails = ['tails', 'tail', 't'];
+
+        if (!validHeads.includes(userChoice) && !validTails.includes(userChoice)) {
+            return message.reply("⚠️ Invalid side! Please choose **heads** or **tails**.");
+        }
+
+        // แปลงเป็นค่ามาตรฐาน (heads/tails)
+        userChoice = validHeads.includes(userChoice) ? 'heads' : 'tails';
 
         try {
             const user = await prisma.user.findUnique({ where: { id: message.author.id } });
             if (!user || user.points < bet) return message.reply("❌ Not enough souls to wager!");
 
-            // 3. เริ่มอนิเมชั่น (Suspense Phase)
-            // ส่งข้อความ "กำลังโยน..." ไปก่อน
-            const suspenseMsg = await message.reply(`🪙 **${message.author.username}** wagers **${bet}** souls...\nThe coin is in the air... *spinning*...`);
+            // 4. เริ่มอนิเมชั่น (Suspense Phase)
+            const suspenseMsg = await message.reply(`🪙 **${message.author.username}** bets **${bet}** on **${userChoice.toUpperCase()}**...\nThe coin is in the air... *spinning*...`);
 
-            // คำนวณผลลัพธ์ล่วงหน้า
-            const win = Math.random() < 0.5;
+            // 5. คำนวณผลลัพธ์
+            const isHeads = Math.random() < 0.5;
+            const resultSide = isHeads ? 'heads' : 'tails';
+            const win = (userChoice === resultSide);
+
             let finalPoints = 0;
 
             if (win) {
@@ -381,14 +396,15 @@ client.on('messageCreate', async (message) => {
                 finalPoints = updated.points;
             }
 
-            // 4. รอ 2 วินาที แล้วเฉลยผล (Edit Message)
+            // 6. เฉลยผล
             setTimeout(async () => {
+                const coinEmoji = isHeads ? '🌕' : '🌑'; // Full Moon = Heads, New Moon = Tails
                 if (win) {
-                    await suspenseMsg.edit(`🪙 **${message.author.username}** wagers **${bet}** souls...\nResult: **HEADS!** 🌕\n🎉 **VICTORY!** You won **${bet} souls**. (Total: ${finalPoints})`);
+                    await suspenseMsg.edit(`🪙 Result: **${resultSide.toUpperCase()}** ${coinEmoji}\n🎉 **VICTORY!** Your guess was correct! You won **${bet} souls**. (Total: ${finalPoints})`);
                 } else {
-                    await suspenseMsg.edit(`🪙 **${message.author.username}** wagers **${bet}** souls...\nResult: **TAILS!** 🌑\n💀 **DEFEAT...** The coin betrayed you. You lost **${bet} souls**. (Total: ${finalPoints})`);
+                    await suspenseMsg.edit(`🪙 Result: **${resultSide.toUpperCase()}** ${coinEmoji}\n💀 **DEFEAT...** You guessed wrong. You lost **${bet} souls**. (Total: ${finalPoints})`);
                 }
-            }, 2000); // ดีเลย์ 2000ms (2 วินาที)
+            }, 2000);
 
         } catch (error) {
             console.error(error);
