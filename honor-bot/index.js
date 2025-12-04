@@ -333,36 +333,66 @@ client.on('messageCreate', async (message) => {
     // --- 🎲 คำสั่งวัดดวง (!flip <amount>) ---
     if (message.content.toLowerCase().startsWith('!flip')) {
         const args = message.content.split(' ');
-        const bet = parseInt(args[1]);
+        const betArg = args[1];
 
-        // Validation
-        if (isNaN(bet) || bet <= 0) return message.reply("⚠️ Usage: `!flip <amount>` (e.g., !flip 10)");
+        // 1. ถ้าไม่ใส่จำนวนเงิน -> แสดงกติกา (Rule Book)
+        if (!betArg) {
+            const ruleEmbed = new EmbedBuilder()
+                .setColor(0xFFD700) // สีทอง
+                .setTitle('🎲 Coin Flip Rules')
+                .setDescription('Test your luck with the Order\'s coin.')
+                .addFields(
+                    { name: 'How to Play', value: 'Type `!flip <amount>` to place a bet.', inline: false },
+                    { name: 'Win Condition', value: '50% Chance to double your bet (2x).', inline: true },
+                    { name: 'Lose Condition', value: 'If you lose, your souls are consumed.', inline: true }
+                )
+                .setFooter({ text: 'Warning: Gambling can be addictive. Bet wisely.' });
+
+            return message.channel.send({ embeds: [ruleEmbed] });
+        }
+
+        // 2. ตรวจสอบยอดเงินเดิมพัน
+        const bet = parseInt(betArg);
+        if (isNaN(bet) || bet <= 0) return message.reply("⚠️ Invalid amount. Example: `!flip 10`");
 
         try {
             const user = await prisma.user.findUnique({ where: { id: message.author.id } });
             if (!user || user.points < bet) return message.reply("❌ Not enough souls to wager!");
 
-            // 50% Chance
+            // 3. เริ่มอนิเมชั่น (Suspense Phase)
+            // ส่งข้อความ "กำลังโยน..." ไปก่อน
+            const suspenseMsg = await message.reply(`🪙 **${message.author.username}** wagers **${bet}** souls...\nThe coin is in the air... *spinning*...`);
+
+            // คำนวณผลลัพธ์ล่วงหน้า
             const win = Math.random() < 0.5;
+            let finalPoints = 0;
 
             if (win) {
-                // ชนะ: ได้เงินเพิ่มเท่าตัว
-                await prisma.user.update({
+                const updated = await prisma.user.update({
                     where: { id: user.id },
                     data: { points: { increment: bet } }
                 });
-                return message.reply(`🎉 **Victory!** The coin favored you. You won **${bet} souls**! (Total: ${user.points + bet})`);
+                finalPoints = updated.points;
             } else {
-                // แพ้: เสียเงิน (เผาเงินออกจากระบบ)
-                await prisma.user.update({
+                const updated = await prisma.user.update({
                     where: { id: user.id },
                     data: { points: { decrement: bet } }
                 });
-                return message.reply(`💀 **Defeat...** The coin betrayed you. You lost **${bet} souls**. (Total: ${user.points - bet})`);
+                finalPoints = updated.points;
             }
+
+            // 4. รอ 2 วินาที แล้วเฉลยผล (Edit Message)
+            setTimeout(async () => {
+                if (win) {
+                    await suspenseMsg.edit(`🪙 **${message.author.username}** wagers **${bet}** souls...\nResult: **HEADS!** 🌕\n🎉 **VICTORY!** You won **${bet} souls**. (Total: ${finalPoints})`);
+                } else {
+                    await suspenseMsg.edit(`🪙 **${message.author.username}** wagers **${bet}** souls...\nResult: **TAILS!** 🌑\n💀 **DEFEAT...** The coin betrayed you. You lost **${bet} souls**. (Total: ${finalPoints})`);
+                }
+            }, 2000); // ดีเลย์ 2000ms (2 วินาที)
 
         } catch (error) {
             console.error(error);
+            message.reply("❌ An error occurred with the coin.");
         }
     }
 
