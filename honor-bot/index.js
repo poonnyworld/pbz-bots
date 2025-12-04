@@ -488,7 +488,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // --- 🏆 ระบบ Live Leaderboard (Real-time) ---
-const LEADERBOARD_CHANNEL_ID = '1446233325588058232';
+const LEADERBOARD_CHANNEL_ID = process.env.LEADERBOARD_CHANNEL_ID;
 
 async function updateLeaderboard() {
     try {
