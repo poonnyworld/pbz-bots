@@ -16,9 +16,3 @@ services:
     environment:
       # ⚠️ สำคัญ: บอกให้ Prisma ไปสร้างไฟล์ DB ในโฟลเดอร์ที่เรา Map ไว้
       - DATABASE_URL=file:/app/data/dev.db
-
-  watch-party-bot:
-    build: ./watch-party-bot
-    container_name: watch-party-bot-prod
-    restart: always
-    env_file: .env

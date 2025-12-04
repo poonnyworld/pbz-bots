@@ -16,6 +16,9 @@ model User {
   points    Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // ✅ เพิ่มบรรทัดนี้: เก็บเวลาที่กดรับ Daily ล่าสุด
+  lastDaily DateTime?
   
   // ความสัมพันธ์: User หนึ่งคน มีประวัติการแลกของได้หลายครั้ง
   redemptions Redemption[]
