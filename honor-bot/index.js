@@ -1,5 +1,12 @@
 require('dotenv').config({ path: '../.env' });
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const {
+    Client,
+    GatewayIntentBits,
+    EmbedBuilder,
+    ActionRowBuilder, // ✨ เพิ่มตัวนี้
+    ButtonBuilder,    // ✨ เพิ่มตัวนี้
+    ButtonStyle       // ✨ เพิ่มตัวนี้
+} = require('discord.js');
 const { PrismaClient } = require('@prisma/client');
 const express = require('express'); // 1. เรียก Express
 const cors = require('cors');       // 2. เรียก CORS
