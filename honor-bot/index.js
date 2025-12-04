@@ -487,4 +487,61 @@ client.on('interactionCreate', async (interaction) => {
 
 });
 
+// --- 🏆 ระบบ Live Leaderboard (Real-time) ---
+const LEADERBOARD_CHANNEL_ID = '1446233325588058232';
+
+async function updateLeaderboard() {
+    try {
+        const channel = client.channels.cache.get(LEADERBOARD_CHANNEL_ID);
+        if (!channel) return console.log("⚠️ Leaderboard channel not found.");
+
+        // 1. ดึงข้อมูล Top 10 จาก Database
+        const topUsers = await prisma.user.findMany({
+            take: 10,
+            orderBy: { points: 'desc' }
+        });
+
+        // 2. สร้างข้อความตาราง (String Building)
+        let leaderboardText = topUsers.map((user, index) => {
+            let rankEmoji = '▫️';
+            if (index === 0) rankEmoji = '🥇';
+            if (index === 1) rankEmoji = '🥈';
+            if (index === 2) rankEmoji = '🥉';
+
+            return `${rankEmoji} **#${index + 1}** | **${user.username || 'Unknown'}** — ${user.points} Souls`;
+        }).join('\n');
+
+        if (topUsers.length === 0) leaderboardText = "Waiting for warriors...";
+
+        // 3. สร้าง Embed สวยๆ
+        const embed = new EmbedBuilder()
+            .setColor(0xFF0000) // แดง Phantom
+            .setTitle('🏆 THE ORDER\'S HALL OF FAME')
+            .setDescription(`Top 10 Warriors with the most honor.\nUpdates every minute.\n\n${leaderboardText}`)
+            .setImage('https://images.wallpapersden.com/image/download/phantom-blade-zero_bmdnaWmUmZqaraWkpJRmbmdlrWZlbWU.jpg') // ใส่รูป Banner เท่ๆ
+            .setTimestamp()
+            .setFooter({ text: 'Compete by chatting & playing games!' });
+
+        // 4. ค้นหาข้อความเดิมของบอทเพื่อ Edit (จะได้ไม่รกห้อง)
+        const messages = await channel.messages.fetch({ limit: 10 });
+        const lastBotMsg = messages.find(m => m.author.id === client.user.id);
+
+        if (lastBotMsg) {
+            await lastBotMsg.edit({ embeds: [embed] }); // แก้ไขอันเดิม
+        } else {
+            await channel.send({ embeds: [embed] }); // ส่งอันใหม่
+        }
+
+    } catch (error) {
+        console.error("Leaderboard Update Error:", error);
+    }
+}
+
+// สั่งรันทุกๆ 60 วินาที (หลังจากบอท Online)
+client.once('ready', () => {
+    console.log("🏆 Leaderboard System Initiated...");
+    updateLeaderboard(); // รันครั้งแรกทันที
+    setInterval(updateLeaderboard, 60000); // Loop ทุก 1 นาที
+});
+
 client.login(process.env.HONOR_BOT_TOKEN);
