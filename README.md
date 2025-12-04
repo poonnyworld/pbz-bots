@@ -11,20 +11,19 @@ A comprehensive Discord bot system designed for the **Phantom Blade Zero** commu
 
 ## ✨ Features
 
-### 🤖 Honor Bot (Discord App)
-* **Activity Tracking:** Automatically awards "Souls" (points) to active users in chat.
-* **Economy System:**
-    * `!start` - Register a new account with starting souls.
-    * `!honor` - Check current accumulated souls.
-    * `!shop` - View available rewards in a rich embed interface.
-    * `!buy <ID>` - Redeem rewards (cuts points & stock automatically).
-* **Data Persistence:** SQLite database managed via Prisma ORM.
+### 🤖 Discord Commands (Economy & Honor)
+* **Honor System:** Automatically tracks user engagement and awards "Souls" (points).
+* **Economy Commands:**
+  * `!start` - Register a new warrior profile/wallet.
+  * `!honor` - Check your current accumulated Souls.
+  * `!shop` - Open the reward redemption interface (Rich Embed).
+  * `!buy <ID>` - Redeem items (Automatically handles stock & deductions).
 
-### 💻 Admin Console (Web Dashboard)
-* **Real-time Leaderboard:** View top warriors and their honor points.
-* **Item Management:** Add, edit, hide, or delete shop items via a web interface.
-* **User Management:** Manually adjust user points (for events or corrections).
-* **Secure Access:** Runs on a dedicated port restricted by Docker network.
+### 💻 Admin Dashboard (Web Interface)
+* **Item Management:** Add, edit, hide, or delete shop items in real-time.
+* **Leaderboard:** View the top-ranking warriors in the community.
+* **User Management:** Manually adjust user points/souls for event rewards.
+* **Access:** Accessible via web browser on port `3000` (default).
 
 ---
 
@@ -33,8 +32,8 @@ A comprehensive Discord bot system designed for the **Phantom Blade Zero** commu
 * **Runtime:** Node.js (v20 Alpine)
 * **Framework:** Discord.js v14, Express.js
 * **Database:** SQLite + Prisma ORM
-* **Deployment:** Docker Compose (Microservices Architecture)
-* **Frontend:** Vanilla HTML/CSS (Custom Phantom Blade Theme)
+* **Deployment:** Docker Compose (V2)
+* **Infrastructure:** Cloud VPS (Linux/Ubuntu)
 
 ---
 
@@ -67,10 +66,16 @@ cd pbz-bots
 ```
 
 ### 2. Configuration
-Create a .env file in the root directory:
+You must manually create a .env file to store your secrets (it is not included in the repo for security)
+```bash
+# Create .env file
+nano .env
+```
+Add the following variables to the .env file:
 ```.env
-HONOR_BOT_TOKEN=your_discord_bot_token_here
-WATCH_PARTY_TOKEN=your_second_bot_token_here
+DISCORD_TOKEN=your_pbz_bot_token_here
+DATABASE_URL="file:./dev.db"
+# Add other credentials if used (e.g. Dashboard Admin Password)
 ```
 
 ### 3. Run with Docker
@@ -79,9 +84,27 @@ Launch the entire system with a single command:
 docker compose up -d --build
 ```
 
-### 4. Verification
+### 4. Database Setup
+If running for the first time, ensure the database schema is pushed:
+```bash
+docker compose exec honor-bot npx prisma migrate deploy
+```
+
+### 5. Verification
 * **Discord Bot:** Type !start in your server.
 * **Admin Console:** Visit http://localhost:3000 (or your VPS IP).
+
+---
+
+## 🔍 Troubleshooting & Common Issues
+
+**🔴 Error:**  env file .env not found
+* **Cause:** Docker cannot find the configuration file.
+* **Fix:** You skipped Step 2. Please run nano .env and paste your configuration variables inside.
+
+**🟡 Warning:** attribute version is obsolete
+* **Cause:** The docker-compose.yml file contained a legacy version number (e.g., version: '3.8').
+* **Fix:** We have updated the file to Docker Compose V2 standards by removing the version line. If you see this warning, it means your file might still have the old line, or you can simply ignore it as it doesn't affect functionality.
 
 ---
 
