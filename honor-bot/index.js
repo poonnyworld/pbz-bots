@@ -294,6 +294,78 @@ client.on('messageCreate', async (message) => {
         }
     }
 
+    // --- 📅 คำสั่งรับแต้มรายวัน (!daily) ---
+    if (message.content.toLowerCase() === '!daily') {
+        try {
+            const user = await prisma.user.findUnique({ where: { id: message.author.id } });
+
+            // เช็คว่ามี User หรือยัง
+            if (!user) return message.reply("⚠️ You are not registered. Type `!start` first.");
+
+            // เช็ค Cooldown (24 ชั่วโมง)
+            const now = new Date();
+            const lastDaily = user.lastDaily ? new Date(user.lastDaily) : new Date(0);
+            const diffTime = Math.abs(now - lastDaily);
+            const hoursPassed = diffTime / (1000 * 60 * 60);
+
+            if (hoursPassed < 24) {
+                const waitHours = Math.floor(24 - hoursPassed);
+                return message.reply(`⏳ You must wait **${waitHours} hours** to claim your daily souls.`);
+            }
+
+            // แจกแต้ม (เช่น 50 แต้ม)
+            const reward = 50;
+            await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    points: { increment: reward },
+                    lastDaily: now
+                }
+            });
+
+            await message.reply(`🌞 **Blessing Received!** You gained **${reward} souls**. Come back tomorrow.`);
+
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    // --- 🎲 คำสั่งวัดดวง (!flip <amount>) ---
+    if (message.content.toLowerCase().startsWith('!flip')) {
+        const args = message.content.split(' ');
+        const bet = parseInt(args[1]);
+
+        // Validation
+        if (isNaN(bet) || bet <= 0) return message.reply("⚠️ Usage: `!flip <amount>` (e.g., !flip 10)");
+
+        try {
+            const user = await prisma.user.findUnique({ where: { id: message.author.id } });
+            if (!user || user.points < bet) return message.reply("❌ Not enough souls to wager!");
+
+            // 50% Chance
+            const win = Math.random() < 0.5;
+
+            if (win) {
+                // ชนะ: ได้เงินเพิ่มเท่าตัว
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { points: { increment: bet } }
+                });
+                return message.reply(`🎉 **Victory!** The coin favored you. You won **${bet} souls**! (Total: ${user.points + bet})`);
+            } else {
+                // แพ้: เสียเงิน (เผาเงินออกจากระบบ)
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { points: { decrement: bet } }
+                });
+                return message.reply(`💀 **Defeat...** The coin betrayed you. You lost **${bet} souls**. (Total: ${user.points - bet})`);
+            }
+
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
 });
 
 client.login(process.env.HONOR_BOT_TOKEN);
