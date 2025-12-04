@@ -330,86 +330,137 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    /// --- 🎲 คำสั่งวัดดวง (!flip <amount> <side>) ---
+    // --- 🎲 คำสั่งวัดดวง (!flip <amount> <side>) [Updated Logic] ---
     if (message.content.toLowerCase().startsWith('!flip')) {
         const args = message.content.split(' ');
         const betArg = args[1];
-        const sideArg = args[2]; // รับค่า หัว/ก้อย
+        const sideArg = args[2];
 
-        // 1. ถ้าใส่ไม่ครบ หรือไม่ถูก format -> แสดงกติกา (Rule Book)
+        // ⚙️ ตั้งค่าความโหด (Config)
+        const MAX_BET = 500;        // แทงสูงสุดต่อตา
+        const DAILY_FLIP_LIMIT = 5; // เล่นได้วันละกี่ครั้ง
+
+        // 1. เช็คกติกาเบื้องต้น
         if (!betArg || !sideArg) {
             const ruleEmbed = new EmbedBuilder()
-                .setColor(0xFFD700) // สีทอง
+                .setColor(0xFFD700)
                 .setTitle('🎲 Coin Flip Rules')
                 .setDescription('Test your luck with the Order\'s coin.')
                 .addFields(
-                    { name: 'How to Play', value: 'Type `!flip <amount> <heads/tails>`\nExample: `!flip 100 heads`', inline: false },
-                    { name: 'Win Condition', value: 'If the coin matches your call, you win **2x** your bet.', inline: false },
-                    { name: 'Lose Condition', value: 'If you guess wrong, your souls are consumed.', inline: false }
+                    { name: 'How to Play', value: 'Type `!flip <amount> <heads/tails>`\nEx: `!flip 100 h`', inline: false },
+                    { name: 'Limits', value: `• Max Bet: **${MAX_BET}** souls\n• Daily Limit: **${DAILY_FLIP_LIMIT}** times/day`, inline: false }, // อัปเดตกติกาตรงนี้
+                    { name: 'Win/Lose', value: 'Win = **2x** payoff. Lose = Souls consumed.', inline: false }
                 )
-                .setFooter({ text: 'Warning: Gambling can be addictive. Bet wisely.' });
+                .setFooter({ text: 'Play responsibly. The Order watches.' });
 
             return message.channel.send({ embeds: [ruleEmbed] });
         }
 
-        // 2. ตรวจสอบยอดเงิน
         const bet = parseInt(betArg);
         if (isNaN(bet) || bet <= 0) return message.reply("⚠️ Invalid amount.");
 
-        // 3. ตรวจสอบการเลือกฝั่ง (Heads/Tails)
+        // 🚨 ป้องกันเงินเฟ้อ 1: ห้ามแทงเกินลิมิต
+        if (bet > MAX_BET) return message.reply(`⛔ **Limit Exceeded!** You can only bet up to **${MAX_BET}** souls.`);
+
+        // ตรวจสอบฝั่ง
         let userChoice = sideArg.toLowerCase();
         const validHeads = ['heads', 'head', 'h'];
         const validTails = ['tails', 'tail', 't'];
-
-        if (!validHeads.includes(userChoice) && !validTails.includes(userChoice)) {
-            return message.reply("⚠️ Invalid side! Please choose **heads** or **tails**.");
-        }
-
-        // แปลงเป็นค่ามาตรฐาน (heads/tails)
+        if (!validHeads.includes(userChoice) && !validTails.includes(userChoice)) return message.reply("⚠️ Invalid side. Choose **h** or **t**.");
         userChoice = validHeads.includes(userChoice) ? 'heads' : 'tails';
 
         try {
             const user = await prisma.user.findUnique({ where: { id: message.author.id } });
-            if (!user || user.points < bet) return message.reply("❌ Not enough souls to wager!");
+            if (!user || user.points < bet) return message.reply("❌ Not enough souls!");
 
-            // 4. เริ่มอนิเมชั่น (Suspense Phase)
+            // 🚨 ป้องกันเงินเฟ้อ 2: เช็คจำนวนครั้งต่อวัน
+            const now = new Date();
+            const lastReset = new Date(user.lastFlipReset);
+
+            // ถ้าเป็นวันใหม่ (เทียบแค่วัน/เดือน/ปี) ให้รีเซ็ต
+            if (now.toDateString() !== lastReset.toDateString()) {
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { flipCount: 0, lastFlipReset: now }
+                });
+                user.flipCount = 0; // อัปเดตตัวแปร local ด้วย
+            }
+
+            if (user.flipCount >= DAILY_FLIP_LIMIT) {
+                return message.reply(`⛔ **Daily Limit Reached!** You have played ${DAILY_FLIP_LIMIT}/${DAILY_FLIP_LIMIT} times today. Come back tomorrow.`);
+            }
+
+            // --- เริ่มเกม (อนิเมชั่น) ---
             const suspenseMsg = await message.reply(`🪙 **${message.author.username}** bets **${bet}** on **${userChoice.toUpperCase()}**...\nThe coin is in the air... *spinning*...`);
 
-            // 5. คำนวณผลลัพธ์
+            // คำนวณผล
             const isHeads = Math.random() < 0.5;
             const resultSide = isHeads ? 'heads' : 'tails';
             const win = (userChoice === resultSide);
 
             let finalPoints = 0;
 
+            // อัปเดต DB (ตัดเงิน/เพิ่มเงิน + เพิ่มรอบการเล่น)
             if (win) {
                 const updated = await prisma.user.update({
                     where: { id: user.id },
-                    data: { points: { increment: bet } }
+                    data: {
+                        points: { increment: bet },
+                        flipCount: { increment: 1 },
+                        lastFlipReset: now
+                    }
                 });
                 finalPoints = updated.points;
             } else {
                 const updated = await prisma.user.update({
                     where: { id: user.id },
-                    data: { points: { decrement: bet } }
+                    data: {
+                        points: { decrement: bet },
+                        flipCount: { increment: 1 },
+                        lastFlipReset: now
+                    }
                 });
                 finalPoints = updated.points;
             }
 
-            // 6. เฉลยผล
+            // เฉลยผล
             setTimeout(async () => {
-                const coinEmoji = isHeads ? '🌕' : '🌑'; // Full Moon = Heads, New Moon = Tails
+                const coinEmoji = isHeads ? '🌕' : '🌑';
                 if (win) {
-                    await suspenseMsg.edit(`🪙 Result: **${resultSide.toUpperCase()}** ${coinEmoji}\n🎉 **VICTORY!** Your guess was correct! You won **${bet} souls**. (Total: ${finalPoints})`);
+                    await suspenseMsg.edit(`🪙 Result: **${resultSide.toUpperCase()}** ${coinEmoji}\n🎉 **VICTORY!** Correct! You won **${bet} souls**. (Total: ${finalPoints})\n(Played: ${user.flipCount + 1}/${DAILY_FLIP_LIMIT} today)`);
                 } else {
-                    await suspenseMsg.edit(`🪙 Result: **${resultSide.toUpperCase()}** ${coinEmoji}\n💀 **DEFEAT...** You guessed wrong. You lost **${bet} souls**. (Total: ${finalPoints})`);
+                    await suspenseMsg.edit(`🪙 Result: **${resultSide.toUpperCase()}** ${coinEmoji}\n💀 **DEFEAT...** Wrong guess. You lost **${bet} souls**. (Total: ${finalPoints})\n(Played: ${user.flipCount + 1}/${DAILY_FLIP_LIMIT} today)`);
                 }
             }, 2000);
 
         } catch (error) {
             console.error(error);
-            message.reply("❌ An error occurred with the coin.");
+            message.reply("❌ System Error.");
         }
+    }
+
+    // --- 🎮 ศูนย์รวมเกม (!game) ---
+    if (message.content.toLowerCase() === '!game') {
+        const gameEmbed = new EmbedBuilder()
+            .setColor(0x9b59b6) // สีม่วงดูลึกลับ
+            .setTitle('🎪 The Order\'s Playground')
+            .setDescription('Select an activity to earn (or lose) souls.')
+            .addFields(
+                { name: '📅 Daily Check-in', value: '`!daily`\nGet free souls every 24h.', inline: true },
+                { name: '🎲 Coin Flip', value: '`!flip`\nDouble your bet. 50/50 chance.', inline: true },
+                { name: '🔜 Coming Soon', value: 'Slots, Duel, Bounty Hunt', inline: true }
+            )
+            .setFooter({ text: 'Use the commands above to play.' });
+
+        // สร้างปุ่ม (Optional: ถ้าอยากให้กดแล้วโชว์กติกาเกมนั้นๆ)
+        /* const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('help_flip').setLabel('Coin Rules').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('help_daily').setLabel('Daily Info').setStyle(ButtonStyle.Secondary)
+        );
+        */
+
+        // ส่งแค่ Embed ไปก่อนเพื่อความเรียบง่าย
+        await message.channel.send({ embeds: [gameEmbed] });
     }
 
 });

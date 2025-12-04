@@ -17,8 +17,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // ✅ เพิ่มบรรทัดนี้: เก็บเวลาที่กดรับ Daily ล่าสุด
+  // เก็บเวลาที่กดรับ Daily ล่าสุด
   lastDaily DateTime?
+
+  flipCount     Int       @default(0)      // เล่นไปกี่ครั้งแล้ว
+  lastFlipReset DateTime  @default(now())  // วันที่รีเซ็ตล่าสุด
   
   // ความสัมพันธ์: User หนึ่งคน มีประวัติการแลกของได้หลายครั้ง
   redemptions Redemption[]
